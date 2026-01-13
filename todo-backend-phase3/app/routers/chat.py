@@ -37,6 +37,25 @@ class ChatResponse(BaseModel):
 # ============================================================================
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+import httpx
+
+@router.get("/ollama-health")
+async def ollama_health():
+    """Diagnostic endpoint to check Ollama connectivity."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://127.0.0.1:11434/api/tags", timeout=2.0)
+            return {
+                "status": "connected",
+                "ollama_response": response.json(),
+                "url": "http://127.0.0.1:11434/api/tags"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "url": "http://127.0.0.1:11434/api/tags"
+        }
 
 
 @router.post("", response_model=ChatResponse, status_code=200)
