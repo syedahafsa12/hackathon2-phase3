@@ -53,7 +53,7 @@ def create_agent(session: Session, user: User) -> AgentExecutor:
     llm = ChatOllama(
         model="llama3.2",
         temperature=0.3,  # Lower = faster, more focused responses
-        base_url="http://localhost:11434",  # Ollama default URL
+        base_url="http://127.0.0.1:11434",  # Use IP for stability in container
         num_predict=200,  # Reduced from 512 - shorter responses
         top_k=10,  # Reduce sampling space
         top_p=0.9,  # Nucleus sampling
