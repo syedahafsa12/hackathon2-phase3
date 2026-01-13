@@ -1,4 +1,3 @@
-# Deploy Update: 2026-01-13
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
