@@ -1,14 +1,18 @@
 # File: backend/app/services/agent_service.py
-# Phase III: AI Chatbot - LangChain Agent with Ollama
+# Phase III: AI Chatbot - LangChain Agent with Ollama/Groq
 # Spec: specs/001-competition-todo-app/phase3.md
 # Implements stateless agent that uses MCP tools to manage tasks
+# PRODUCTION: Uses Groq API as fallback when Ollama isn't available
 
 from typing import List, Dict, Any
+import os
 from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from sqlmodel import Session
+import httpx
 
 from app.models.user import User
 from app.mcp.langchain_tools import create_langchain_tools
@@ -34,9 +38,22 @@ Always confirm actions. Show task IDs when listing. Keep responses under 3 sente
 # AGENT FACTORY
 # ============================================================================
 
+def _check_ollama_available() -> bool:
+    """Check if Ollama is running and accessible."""
+    try:
+        response = httpx.get("http://localhost:11434/api/tags", timeout=2.0)
+        return response.status_code == 200
+    except:
+        return False
+
+
 def create_agent(session: Session, user: User) -> AgentExecutor:
     """
-    Create a LangChain agent with Ollama LLM and MCP tools.
+    Create a LangChain agent with LLM and MCP tools.
+
+    Auto-detects environment:
+    - Local development: Uses Ollama (llama3.2)
+    - Production/Cloud: Uses Groq API (llama-3.3-70b-versatile)
 
     The agent is stateless - conversation history is managed externally
     and passed in with each request.
@@ -49,17 +66,37 @@ def create_agent(session: Session, user: User) -> AgentExecutor:
         AgentExecutor ready to process messages
     """
 
-    # Initialize Ollama LLM (llama3.2) - OPTIMIZED FOR SPEED
-    llm = ChatOllama(
-        model="llama3.2",
-        temperature=0.3,  # Lower = faster, more focused responses
-        base_url="http://127.0.0.1:11434",  # Use IP for stability in container
-        num_predict=200,  # Reduced from 512 - shorter responses
-        top_k=10,  # Reduce sampling space
-        top_p=0.9,  # Nucleus sampling
-        repeat_penalty=1.1,  # Prevent repetition
-        num_ctx=2048,  # Context window (reduced for speed)
-    )
+    # Check if Ollama is available (local development)
+    use_ollama = _check_ollama_available()
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
+
+    if use_ollama:
+        # LOCAL: Use Ollama (llama3.2)
+        print("🟢 Using Ollama (local)")
+        llm = ChatOllama(
+            model="llama3.2",
+            temperature=0.3,
+            base_url="http://localhost:11434",
+            num_predict=200,
+            top_k=10,
+            top_p=0.9,
+            repeat_penalty=1.1,
+            num_ctx=2048,
+        )
+    elif groq_api_key:
+        # PRODUCTION: Use Groq API (free, fast)
+        print("🔵 Using Groq API (production)")
+        llm = ChatGroq(
+            model="llama-3.3-70b-versatile",  # Fast and capable
+            temperature=0.3,
+            max_tokens=200,
+            groq_api_key=groq_api_key,
+        )
+    else:
+        raise ValueError(
+            "No LLM available! Set GROQ_API_KEY environment variable for production. "
+            "Get free API key at https://console.groq.com"
+        )
 
     # Create tools with bound session and user
     tools = create_langchain_tools(session, user)

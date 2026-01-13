@@ -38,6 +38,7 @@ langchain==0.3.14
 langchain-core>=0.3.0
 langchain-community==0.3.14
 langchain-ollama==0.2.1
+langchain-groq>=0.2.0  # Production LLM (Groq API)
 
 # MCP (Model Context Protocol)
 mcp==1.25.0
