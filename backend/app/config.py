@@ -18,12 +18,12 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "jwt_algorithm", mode="before")
     @classmethod
-    def clean_database_url(cls, v: str):
-        if v:
+    def clean_settings(cls, v: str):
+        if isinstance(v, str):
             v = v.strip()
-            # Fix scheme for SQLAlchemy
+            # Fix scheme for SQLAlchemy if it's the database_url
             if v.startswith("postgres://"):
                 v = v.replace("postgres://", "postgresql://", 1)
         return v
