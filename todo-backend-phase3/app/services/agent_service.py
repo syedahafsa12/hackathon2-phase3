@@ -54,9 +54,10 @@ ALWAYS call the tool first, then confirm what you did. Be brief (max 2 sentences
 # ============================================================================
 
 def _check_ollama_available() -> bool:
-    """Check if Ollama is running and accessible."""
+    """Check if Ollama is running and accessible (for local dev)."""
     try:
-        response = httpx.get("http://localhost:11434/api/tags", timeout=2.0)
+        # Use 127.0.0.1 for container stability
+        response = httpx.get("http://127.0.0.1:11434/api/tags", timeout=1.0)
         return response.status_code == 200
     except:
         return False
@@ -67,50 +68,38 @@ def create_agent(session: Session, user: User) -> AgentExecutor:
     Create a LangChain agent with LLM and MCP tools.
 
     Auto-detects environment:
-    - Local development: Uses Ollama (llama3.2)
-    - Production/Cloud: Uses Groq API (llama-3.3-70b-versatile)
-
-    The agent is stateless - conversation history is managed externally
-    and passed in with each request.
-
-    Args:
-        session: Database session for tool execution
-        user: Current authenticated user
-
-    Returns:
-        AgentExecutor ready to process messages
+    - Production/Cloud: Uses Groq API if GROQ_API_KEY set (HIGH PRIORITY)
+    - Local development: Uses Ollama (llama3.2) if running
     """
 
-    # Check if Ollama is available (local development)
-    use_ollama = _check_ollama_available()
-    groq_api_key = os.getenv("GROQ_API_KEY", "")
-
-    if use_ollama:
-        # LOCAL: Use Ollama (llama3.2)
-        print("🟢 Using Ollama (local)")
+    groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
+    
+    # Priority 1: Groq API (Fast, reliable, best for production)
+    if groq_api_key:
+        print("🔵 Using Groq API (Production/High Performance)")
+        llm = ChatGroq(
+            model="llama-3.3-70b-versatile",
+            temperature=0.3,
+            max_tokens=200,
+            groq_api_key=groq_api_key,
+        )
+    # Priority 2: Ollama (Local development or fallback)
+    elif _check_ollama_available():
+        print("🟢 Using Ollama (Local/Fallback)")
         llm = ChatOllama(
             model="llama3.2",
             temperature=0.3,
-            base_url="http://localhost:11434",
+            base_url="http://127.0.0.1:11434",
             num_predict=200,
             top_k=10,
             top_p=0.9,
             repeat_penalty=1.1,
             num_ctx=2048,
         )
-    elif groq_api_key:
-        # PRODUCTION: Use Groq API (free, fast)
-        print("🔵 Using Groq API (production)")
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",  # Fast and capable
-            temperature=0.3,
-            max_tokens=200,
-            groq_api_key=groq_api_key,
-        )
     else:
         raise ValueError(
-            "No LLM available! Set GROQ_API_KEY environment variable for production. "
-            "Get free API key at https://console.groq.com"
+            "No LLM provider available! Please set GROQ_API_KEY in environment variables "
+            "for production performance. (https://console.groq.com)"
         )
 
     # Create tools with bound session and user
@@ -135,12 +124,12 @@ def create_agent(session: Session, user: User) -> AgentExecutor:
     agent_executor = AgentExecutor(
         agent=agent,
         tools=tools,
-        verbose=True,  # Log tool calls for debugging
+        verbose=True,
         handle_parsing_errors=True,
-        max_iterations=5,  # Allow enough iterations for tool calling
-        return_intermediate_steps=True,  # Return tool call details
-        max_execution_time=15,  # 15 second timeout
-        early_stopping_method="force",  # Stop immediately if max iterations reached
+        max_iterations=5,
+        return_intermediate_steps=True,
+        max_execution_time=25,  # Increased for slow cold-starts
+        early_stopping_method="force",
     )
 
     return agent_executor
@@ -206,7 +195,10 @@ async def run_agent(
 
         # If output is empty or agent stopped early, provide helpful message
         if not response or "Agent stopped" in str(result):
-            response = "I've processed your request. The task should be complete. You can check your task list to verify."
+            if not tool_calls:
+                 response = "I'm sorry, I couldn't process that request properly. Could you please rephrase it?"
+            else:
+                 response = "I've processed your request. You can check your task list to verify the changes."
 
         return {
             "response": response,
