@@ -43,6 +43,13 @@ export function useChat(conversationId?: number) {
       queryClient.invalidateQueries({ queryKey: ['conversation', data.conversation_id, 'messages'] })
       // Invalidate conversations list to update timestamp
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
+
+      // IMPORTANT: Refresh tasks list if chatbot performed any task operations
+      // This ensures the dashboard updates immediately after chatbot actions
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+
+      // Also invalidate tags in case they were updated
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
     },
     onError: (error: any) => {
       const message = error.response?.data?.detail || 'Failed to send message'
