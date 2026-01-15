@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recurring-service
+  namespace: taskflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recurring-service
+  template:
+    metadata:
+      labels:
+        app: recurring-service
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "recurring-service"
+        dapr.io/app-port: "8003"
+    spec:
+      containers:
+      - name: recurring-service
+        image: taskflow-recurring:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8003
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recurring-service
+  namespace: taskflow
+spec:
+  selector:
+    app: recurring-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8003

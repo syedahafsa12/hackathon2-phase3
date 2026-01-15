@@ -1,0 +1,32 @@
+# ============================================================================
+# Helm Chart Metadata for Todo Chatbot Application
+# Phase 4: Kubernetes Deployment on Minikube
+# ============================================================================
+
+apiVersion: v2
+name: todo-app
+description: A cloud-native Todo Chatbot application with AI capabilities
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - todo
+  - chatbot
+  - ai
+  - fastapi
+  - nextjs
+
+maintainers:
+  - name: Hackathon Team
+    email: team@example.com
+
+sources:
+  - https://github.com/your-org/todo-app
+
+# Dependencies (PostgreSQL subchart)
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled

@@ -1,0 +1,238 @@
+# ============================================================================
+# Helm Chart Values for Todo Chatbot Application
+# Phase 4: Kubernetes Deployment on Minikube
+#
+# Usage:
+#   helm install todo-app ./helm/todo-app
+#   helm install todo-app ./helm/todo-app -f custom-values.yaml
+# ============================================================================
+
+# Global configuration
+global:
+  environment: development
+
+# Backend Configuration
+backend:
+  enabled: true
+  name: backend
+  replicaCount: 2
+
+  image:
+    repository: todo-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8001
+    targetPort: 8001
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  # Environment variables
+  env:
+    # JWT Configuration
+    JWT_SECRET: "local-development-secret-key-change-in-production-32chars"
+    JWT_ALGORITHM: "HS256"
+    JWT_EXPIRATION_DAYS: "7"
+
+    # CORS Origins (will be templated with frontend service)
+    CORS_ORIGINS: "http://localhost:3000"
+
+    # LLM Configuration
+    GROQ_API_KEY: ""  # Set via --set backend.env.GROQ_API_KEY=xxx or use secrets
+
+    # Environment
+    ENVIRONMENT: "development"
+
+  # Database connection (uses PostgreSQL subchart)
+  database:
+    url: "postgresql://todouser:todopassword@todo-app-postgresql:5432/tododb"
+
+  # Health check configuration
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /health
+      port: 8001
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /health
+      port: 8001
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Frontend Configuration
+frontend:
+  enabled: true
+  name: frontend
+  replicaCount: 2
+
+  image:
+    repository: todo-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  service:
+    type: NodePort
+    port: 3000
+    targetPort: 3000
+    nodePort: 30000  # Access via http://minikube-ip:30000
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+  # Environment variables
+  env:
+    # API URL (will be templated to backend service)
+    NEXT_PUBLIC_API_URL: "http://localhost:8001"
+
+  # Health check configuration
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# PostgreSQL Configuration (Bitnami subchart)
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnami/postgresql
+    tag: latest
+
+  auth:
+    username: todouser
+    password: todopassword
+    database: tododb
+
+  primary:
+    persistence:
+      enabled: true
+      size: 1Gi
+
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 5432
+
+# Ingress Configuration (Optional - for production)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: todo-app.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: todo-app-tls
+      hosts:
+        - todo-app.example.com
+
+# ConfigMap for shared configuration
+configMap:
+  enabled: true
+  data:
+    APP_NAME: "Todo Chatbot"
+    LOG_LEVEL: "info"
+
+# Secrets (use external secrets manager in production)
+secrets:
+  enabled: true
+  # These will be base64 encoded automatically
+  data:
+    jwt-secret: "local-development-secret-key-change-in-production-32chars"
+    groq-api-key: ""  # Set via --set secrets.data.groq-api-key=xxx
+
+# Autoscaling (HPA - Horizontal Pod Autoscaler)
+autoscaling:
+  backend:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  frontend:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+
+# Service Account
+serviceAccount:
+  create: true
+  name: todo-app-sa
+  annotations: {}
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
