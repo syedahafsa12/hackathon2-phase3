@@ -14,7 +14,7 @@ from app.mcp.todo_tools import GEMINI_TOOLS
 # ============================================================================
 
 # Initialize Gemini API with user's API key
-GEMINI_API_KEY = "AIzaSyAgB1vomtnwrwPgtWxmCSci_hwo9uqxr3k"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Model configuration
